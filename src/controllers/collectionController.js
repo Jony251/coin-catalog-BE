@@ -41,7 +41,7 @@ export const addCoin = async (req, res, next) => {
     }
 
     const newCoin = {
-      id: `uc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      id: `uc_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`,
       catalogCoinId,
       condition: condition || null,
       grade: grade || null,

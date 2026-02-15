@@ -3,6 +3,7 @@ import { AppError } from '../middleware/errorHandler.js';
 
 export const register = async (req, res, next) => {
   try {
+    if (!auth || !db) return next(new AppError('Service unavailable: authentication not configured', 503));
     const { email, password, nickname, photo } = req.body;
 
     if (!nickname || nickname.trim().length < 3) {
@@ -67,6 +68,7 @@ export const register = async (req, res, next) => {
 
 export const login = async (req, res, next) => {
   try {
+    if (!auth || !db) return next(new AppError('Service unavailable: authentication not configured', 503));
     const { email } = req.body;
 
     const userRecord = await auth.getUserByEmail(email);

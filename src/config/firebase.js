@@ -31,6 +31,9 @@ let db;
 let auth;
 
 try {
+  if (!serviceAccount?.projectId) {
+    throw new Error('Firebase credentials missing: set serviceAccountKey.json or FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY');
+  }
   firebaseApp = admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
     projectId: serviceAccount.projectId,
@@ -42,6 +45,9 @@ try {
   console.log('✅ Firebase Admin SDK initialized');
 } catch (error) {
   console.error('❌ Firebase Admin SDK initialization error:', error);
+  firebaseApp = undefined;
+  db = undefined;
+  auth = undefined;
 }
 
 export { firebaseApp, db, auth };

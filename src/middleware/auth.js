@@ -2,6 +2,12 @@ import { auth } from '../config/firebase.js';
 
 export const authenticate = async (req, res, next) => {
   try {
+    if (!auth) {
+      return res.status(503).json({
+        success: false,
+        error: 'Service unavailable: authentication not configured',
+      });
+    }
     const authHeader = req.headers.authorization;
     
     if (!authHeader || !authHeader.startsWith('Bearer ')) {

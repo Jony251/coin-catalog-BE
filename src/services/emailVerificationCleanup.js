@@ -48,6 +48,10 @@ class EmailVerificationCleanupService {
    */
   async cleanup() {
     try {
+      if (!db || !auth) {
+        console.log('⏭️ Skipping cleanup: Firebase not initialized');
+        return;
+      }
       console.log('🔍 Checking for unverified users...');
       const now = new Date();
 
@@ -111,6 +115,7 @@ class EmailVerificationCleanupService {
    */
   async checkUser(userId) {
     try {
+      if (!db) return { exists: false };
       const userDoc = await db.collection('users').doc(userId).get();
       
       if (!userDoc.exists) {
