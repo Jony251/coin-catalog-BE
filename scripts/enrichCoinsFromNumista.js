@@ -1,7 +1,5 @@
 #!/usr/bin/env node
 
-import { db } from '../src/config/firebase.js';
-
 const NUMISTA_BASE_URL = 'https://api.numista.com/v3';
 const DEFAULT_COLLECTION = 'coins';
 const DEFAULT_BATCH_SIZE = 200;
@@ -438,9 +436,14 @@ const callNumista = async ({ path, query = {}, numistaApiKey, maxRetries, reques
   return body;
 };
 
-const commitBatchUpdates = async (items) => {
+const loadFirestoreDb = async () => {
+  const firebaseModule = await import('../src/config/firebase.js');
+  return firebaseModule.db;
+};
+
+const commitBatchUpdates = async (dbInstance, items) => {
   if (!items.length) return;
-  const batch = db.batch();
+  const batch = dbInstance.batch();
   for (const item of items) {
     batch.set(item.ref, item.update, { merge: true });
   }
@@ -574,6 +577,7 @@ const main = async () => {
     throw new Error('NUMISTA_API_KEY is missing. Provide it via env var or --numista-api-key option.');
   }
 
+  const db = await loadFirestoreDb();
   if (!db) {
     throw new Error(
       'Firestore is not configured. Provide serviceAccountKey.json or FIREBASE_PROJECT_ID/FIREBASE_CLIENT_EMAIL/FIREBASE_PRIVATE_KEY.'
@@ -691,7 +695,7 @@ const main = async () => {
       });
 
       if (pendingUpdates.length >= options.batchSize) {
-        await commitBatchUpdates(pendingUpdates);
+        await commitBatchUpdates(db, pendingUpdates);
         stats.updated += options.batchSize;
       }
 
@@ -713,7 +717,7 @@ const main = async () => {
 
   if (!options.dryRun && pendingUpdates.length) {
     const remaining = pendingUpdates.length;
-    await commitBatchUpdates(pendingUpdates);
+    await commitBatchUpdates(db, pendingUpdates);
     stats.updated += remaining;
   }
 
