@@ -254,6 +254,8 @@ const shouldEnrichCoin = (coin, force) => {
   const hasName = !isMissingValue(coin.title) || !isMissingValue(coin.name) || !isMissingValue(coin?.numista?.title);
   const hasImages =
     !isMissingValue(coin.image) ||
+    !isMissingValue(coin.imageObverse) ||
+    !isMissingValue(coin.imageReverse) ||
     !isMissingValue(coin.obverseImage) ||
     !isMissingValue(coin.reverseImage) ||
     !isMissingValue(coin?.numista?.obverse?.picture) ||
@@ -345,16 +347,27 @@ const buildFirestoreUpdatePayload = ({ coin, typeData, options }) => {
   const mainImage = pickFirstNonEmpty(obverseImage, reverseImage);
 
   maybeSet('numistaTypeId', typeData.id);
+  maybeSet('numistaId', typeData.id);
   maybeSet('numistaUrl', typeData.url);
   maybeSet('title', typeData.title);
   maybeSet('name', typeData.title);
+  if (options.lang === 'en') {
+    maybeSet('nameEn', typeData.title);
+  }
   maybeSet('image', mainImage);
+  maybeSet('imageObverse', obverseImage);
+  maybeSet('imageReverse', reverseImage);
   maybeSet('obverseImage', obverseImage);
   maybeSet('reverseImage', reverseImage);
   maybeSet('obverseThumbnail', typeData?.obverse?.thumbnail);
   maybeSet('reverseThumbnail', typeData?.reverse?.thumbnail);
+  maybeSet('year', typeData.min_year);
   maybeSet('minYear', typeData.min_year);
   maybeSet('maxYear', typeData.max_year);
+  maybeSet('denomination', typeData?.value?.text);
+  maybeSet('denominationValue', typeData?.value?.numeric_value);
+  maybeSet('currency', typeData?.value?.currency?.name);
+  maybeSet('metal', typeData?.composition?.text);
   maybeSet('weight', typeData.weight);
   maybeSet('diameter', typeData.size);
   maybeSet('size', typeData.size);
@@ -362,6 +375,13 @@ const buildFirestoreUpdatePayload = ({ coin, typeData, options }) => {
   maybeSet('shape', typeData.shape);
   maybeSet('orientation', typeData.orientation);
   maybeSet('composition', typeData?.composition?.text);
+  maybeSet('mint', typeData?.mints?.[0]?.name);
+  maybeSet(
+    'catalogNumber',
+    typeData?.references?.[0]?.catalogue?.code && typeData?.references?.[0]?.number
+      ? `${typeData.references[0].catalogue.code} ${typeData.references[0].number}`
+      : undefined
+  );
   maybeSet('issuerName', typeData?.issuer?.name);
   maybeSet('valueText', typeData?.value?.text);
   maybeSet('description', pickFirstNonEmpty(typeData?.obverse?.description, typeData?.reverse?.description));
