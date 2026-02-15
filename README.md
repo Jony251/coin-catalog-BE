@@ -52,6 +52,42 @@ Production mode:
 NODE_ENV=production npm start
 ```
 
+## Numista enrichment for Firestore coins
+
+Use the script below to enrich missing coin metadata/images in the Firestore `coins` collection from Numista.
+
+Required:
+
+- Firebase Admin credentials (`serviceAccountKey.json` or FIREBASE\_\* env vars)
+- `NUMISTA_API_KEY`
+
+Recommended first run (no writes):
+
+```bash
+NUMISTA_API_KEY=your_key npm run coins:enrich:numista -- --dry-run --verbose
+```
+
+Write updates:
+
+```bash
+NUMISTA_API_KEY=your_key npm run coins:enrich:numista
+```
+
+If Firestore rules allow public writes to `coins` (no Admin SDK credentials available), use the REST runner:
+
+```bash
+NUMISTA_API_KEY=your_key npm run coins:enrich:numista:rest -- --project-id=your_firebase_project_id
+```
+
+Useful options:
+
+- `--collection=<name>` (default `coins`)
+- `--limit=<n>`
+- `--batch-size=<n>` (max 500)
+- `--enable-search` (search Numista when a doc does not contain a type ID)
+- `--force` (overwrite existing top-level fields with Numista values)
+- `--lang=<en|es|fr>`
+
 ## Docker
 
 Build image:
