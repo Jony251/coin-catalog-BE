@@ -1,8 +1,16 @@
 import { db } from '../config/firebase.js';
 import { AppError } from '../middleware/errorHandler.js';
 
+const normalizeNullableText = (value) => {
+  if (value === undefined || value === null) return null;
+  const normalized = String(value).trim();
+  return normalized.length ? normalized : null;
+};
+
 export const getWishlist = async (req, res, next) => {
   try {
+    if (!db) return next(new AppError('Service unavailable: database not configured', 503));
+
     const userId = req.user.uid;
     
     const wishlistDoc = await db.collection('wishlists').doc(userId).get();
@@ -29,6 +37,8 @@ export const getWishlist = async (req, res, next) => {
 
 export const addToWishlist = async (req, res, next) => {
   try {
+    if (!db) return next(new AppError('Service unavailable: database not configured', 503));
+
     const userId = req.user.uid;
     const { catalogCoinId, priority, notes } = req.body;
 
@@ -46,11 +56,12 @@ export const addToWishlist = async (req, res, next) => {
     }
 
     const newCoin = {
-      id: `wl_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      catalogCoinId,
+      id: `wl_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`,
+      catalogCoinId: String(catalogCoinId).trim(),
       priority: priority || 'medium',
-      notes: notes || null,
+      notes: normalizeNullableText(notes),
       addedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     };
 
     coins.push(newCoin);
@@ -73,6 +84,8 @@ export const addToWishlist = async (req, res, next) => {
 
 export const removeFromWishlist = async (req, res, next) => {
   try {
+    if (!db) return next(new AppError('Service unavailable: database not configured', 503));
+
     const userId = req.user.uid;
     const coinId = req.params.id;
 
@@ -84,7 +97,12 @@ export const removeFromWishlist = async (req, res, next) => {
     }
 
     let coins = wishlistDoc.data().coins || [];
+    const initialLength = coins.length;
     coins = coins.filter(c => c.id !== coinId);
+
+    if (coins.length === initialLength) {
+      return next(new AppError('Coin not found', 404));
+    }
 
     await wishlistRef.update({
       coins,

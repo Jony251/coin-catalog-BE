@@ -1,53 +1,85 @@
 import { db } from '../config/firebase.js';
+import { env } from '../config/env.js';
 import { AppError } from '../middleware/errorHandler.js';
+
+const generateEntityId = (prefix) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
+
+const normalizeNullableText = (value) => {
+  if (value === undefined || value === null) return null;
+  const normalized = String(value).trim();
+  return normalized.length ? normalized : null;
+};
+
+const normalizeNullableNumber = (value) => {
+  if (value === undefined || value === null || value === '') return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const normalizeNullableIsoDate = (value) => {
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+};
+
+const buildCollectionCoin = (coin) => ({
+  id: normalizeNullableText(coin.id) || generateEntityId('uc'),
+  catalogCoinId: String(coin.catalogCoinId).trim(),
+  condition: coin.condition || null,
+  grade: normalizeNullableText(coin.grade),
+  purchasePrice: normalizeNullableNumber(coin.purchasePrice),
+  purchaseDate: normalizeNullableIsoDate(coin.purchaseDate),
+  notes: normalizeNullableText(coin.notes),
+  userObverseImage: normalizeNullableText(coin.userObverseImage),
+  userReverseImage: normalizeNullableText(coin.userReverseImage),
+  userWeight: normalizeNullableNumber(coin.userWeight),
+  userDiameter: normalizeNullableNumber(coin.userDiameter),
+  isWishlist: Boolean(coin.isWishlist),
+  addedAt: normalizeNullableIsoDate(coin.addedAt) || new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
+});
+
+const buildWishlistCoin = (coin) => ({
+  id: normalizeNullableText(coin.id) || generateEntityId('wl'),
+  catalogCoinId: String(coin.catalogCoinId).trim(),
+  priority: coin.priority || 'medium',
+  notes: normalizeNullableText(coin.notes),
+  addedAt: normalizeNullableIsoDate(coin.addedAt) || new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
+});
 
 export const syncCollection = async (req, res, next) => {
   try {
+    if (!db) return next(new AppError('Service unavailable: database not configured', 503));
+
     const userId = req.user.uid;
     const { coins } = req.body;
+    if (!Array.isArray(coins)) return next(new AppError('coins must be an array', 400));
+    if (coins.length > env.maxSyncItems) {
+      return next(new AppError(`coins array exceeds max size (${env.maxSyncItems})`, 413));
+    }
 
     const collectionRef = db.collection('collections').doc(userId);
     const collectionDoc = await collectionRef.get();
     
-    // Получаем текущие монеты из Firebase
-    let existingCoins = [];
-    if (collectionDoc.exists) {
-      existingCoins = collectionDoc.data().coins || [];
-    }
+    const existingCoins = collectionDoc.exists ? collectionDoc.data().coins || [] : [];
+    const mergedById = new Map(existingCoins.map((coin) => [coin.id || coin.catalogCoinId, coin]));
 
-    // Мержим: обновляем существующие или добавляем новые
-    for (const coin of coins) {
-      const coinData = {
-        id: coin.id,
-        catalogCoinId: coin.catalogCoinId,
-        condition: coin.condition || null,
-        grade: coin.grade || null,
-        purchasePrice: coin.purchasePrice || null,
-        purchaseDate: coin.purchaseDate || null,
-        notes: coin.notes || '',
-        userObverseImage: coin.userObverseImage || null,
-        userReverseImage: coin.userReverseImage || null,
-        userWeight: coin.userWeight || null,
-        userDiameter: coin.userDiameter || null,
-        isWishlist: coin.isWishlist || false,
-        addedAt: coin.addedAt || new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-
-      const existingIndex = existingCoins.findIndex(
-        c => c.id === coin.id || c.catalogCoinId === coin.catalogCoinId
-      );
-
-      if (existingIndex >= 0) {
-        existingCoins[existingIndex] = coinData;
-      } else {
-        existingCoins.push(coinData);
-      }
+    for (const incomingCoin of coins) {
+      const coin = buildCollectionCoin(incomingCoin);
+      const mergeKey = coin.id || coin.catalogCoinId;
+      const existingCoin = mergedById.get(mergeKey);
+      mergedById.set(mergeKey, {
+        ...(existingCoin || {}),
+        ...coin,
+        // Preserve original addedAt for existing entities.
+        addedAt: existingCoin?.addedAt || coin.addedAt,
+      });
     }
 
     await collectionRef.set({
       userId,
-      coins: existingCoins,
+      coins: Array.from(mergedById.values()),
       updatedAt: new Date(),
     });
 
@@ -55,6 +87,7 @@ export const syncCollection = async (req, res, next) => {
       success: true,
       message: 'Collection synced successfully',
       syncedCount: coins.length,
+      totalCount: mergedById.size,
     });
   } catch (error) {
     console.error('Sync collection error:', error);
@@ -64,20 +97,24 @@ export const syncCollection = async (req, res, next) => {
 
 export const syncWishlist = async (req, res, next) => {
   try {
+    if (!db) return next(new AppError('Service unavailable: database not configured', 503));
+
     const userId = req.user.uid;
     const { coins } = req.body;
+    if (!Array.isArray(coins)) return next(new AppError('coins must be an array', 400));
+    if (coins.length > env.maxSyncItems) {
+      return next(new AppError(`coins array exceeds max size (${env.maxSyncItems})`, 413));
+    }
 
     const wishlistRef = db.collection('wishlists').doc(userId);
+    const normalizedCoins = coins.map((coin) => buildWishlistCoin(coin));
+    const deduplicatedByCatalogId = new Map(
+      normalizedCoins.map((coin) => [coin.catalogCoinId, coin])
+    );
     
     await wishlistRef.set({
       userId,
-      coins: coins.map(coin => ({
-        id: coin.id,
-        catalogCoinId: coin.catalogCoinId,
-        priority: coin.priority || 'medium',
-        notes: coin.notes || null,
-        addedAt: coin.addedAt || new Date().toISOString(),
-      })),
+      coins: Array.from(deduplicatedByCatalogId.values()),
       updatedAt: new Date(),
     });
 
@@ -85,6 +122,7 @@ export const syncWishlist = async (req, res, next) => {
       success: true,
       message: 'Wishlist synced successfully',
       syncedCount: coins.length,
+      totalCount: deduplicatedByCatalogId.size,
     });
   } catch (error) {
     console.error('Sync wishlist error:', error);
@@ -94,6 +132,8 @@ export const syncWishlist = async (req, res, next) => {
 
 export const getSyncStatus = async (req, res, next) => {
   try {
+    if (!db) return next(new AppError('Service unavailable: database not configured', 503));
+
     const userId = req.user.uid;
     
     const collectionDoc = await db.collection('collections').doc(userId).get();

@@ -1,94 +1,132 @@
 # Coin Catalog Backend API
 
-Backend сервер для приложения каталога монет.
+Production-oriented backend for the Coin Catalog app.
 
-## Установка
+## What is production-ready now
 
-```bash
-npm install
-```
+- Security middleware (`helmet`, CORS allow-list, request body limits)
+- Request correlation IDs (`X-Request-Id`)
+- API rate limiting (`express-rate-limit`)
+- Safer centralized error handling (no internal leaks in production)
+- Liveness (`/health`) and readiness (`/ready`) endpoints
+- Graceful shutdown with timeout
+- Stronger payload validation for auth/collection/wishlist/sync routes
+- Secure password verification for `/auth/login` via Firebase Identity Toolkit
+- Docker runtime hardening (non-root user + container healthcheck)
+- CI workflow for install + tests
 
-## Настройка
+## Requirements
 
-1. Configure Firebase Admin SDK (выберите один из вариантов):
+- Node.js 20+
+- npm 10+
+- Firebase project (Admin credentials + Web API key)
 
-### Вариант A: JSON файл (рекомендуется)
-- Скачайте `serviceAccountKey.json` из Firebase Console:
-  - Project Settings → Service Accounts → Generate New Private Key
-- Поместите файл в корень `back_end/serviceAccountKey.json`
+## Environment setup
 
-### Вариант B: Переменные окружения
-- Создайте `.env` файл на основе `.env.example`:
+Create local env file:
+
 ```bash
 cp .env.example .env
 ```
-- Заполните `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY`
-- **Важно:** `FIREBASE_PRIVATE_KEY` должен быть в одну строку с `\n` вместо переносов
-2. Настройки CORS
-3. Порт сервера
 
-## Запуск
+Set required variables:
+
+- `FIREBASE_PROJECT_ID`
+- `FIREBASE_CLIENT_EMAIL`
+- `FIREBASE_PRIVATE_KEY`
+- `FIREBASE_WEB_API_KEY` (required for secure `/api/v1/auth/login`)
+- `ALLOWED_ORIGINS` (must include your frontend production domain)
+
+You can also place `serviceAccountKey.json` at repository root instead of using the 3 Firebase Admin env vars.
+
+## Run locally
 
 ```bash
-# Development
+npm install
 npm run dev
-
-# Production
-npm start
 ```
 
-## API Endpoints
+Production mode:
 
-### Аутентификация
-- `POST /api/v1/auth/register` - Регистрация пользователя
-- `POST /api/v1/auth/login` - Вход пользователя
-- `POST /api/v1/auth/logout` - Выход пользователя
-- `GET /api/v1/auth/verify` - Проверка токена
-
-### Коллекция пользователя
-- `GET /api/v1/collection` - Получить коллекцию пользователя
-- `POST /api/v1/collection` - Добавить монету в коллекцию
-- `PUT /api/v1/collection/:id` - Обновить монету в коллекции
-- `DELETE /api/v1/collection/:id` - Удалить монету из коллекции
-- `GET /api/v1/collection/stats` - Статистика коллекции
-
-### Список желаний
-- `GET /api/v1/wishlist` - Получить список желаний
-- `POST /api/v1/wishlist` - Добавить монету в список желаний
-- `DELETE /api/v1/wishlist/:id` - Удалить из списка желаний
-
-### Синхронизация
-- `POST /api/v1/sync/collection` - Синхронизировать коллекцию
-- `POST /api/v1/sync/wishlist` - Синхронизировать список желаний
-- `GET /api/v1/sync/status` - Статус синхронизации
-
-## Структура проекта
-
+```bash
+NODE_ENV=production npm start
 ```
-back_end/
-├── src/
-│   ├── index.js              # Точка входа
-│   ├── config/
-│   │   ├── firebase.js       # Firebase Admin SDK
-│   │   └── cors.js           # CORS настройки
-│   ├── middleware/
-│   │   ├── auth.js           # Аутентификация
-│   │   ├── errorHandler.js   # Обработка ошибок
-│   │   └── validation.js     # Валидация данных
-│   ├── routes/
-│   │   ├── auth.js           # Маршруты аутентификации
-│   │   ├── collection.js     # Маршруты коллекции
-│   │   ├── wishlist.js       # Маршруты списка желаний
-│   │   └── sync.js           # Маршруты синхронизации
-│   ├── controllers/
-│   │   ├── authController.js
-│   │   ├── collectionController.js
-│   │   ├── wishlistController.js
-│   │   └── syncController.js
-│   └── services/
-│       ├── firebaseService.js
-│       └── collectionService.js
-├── package.json
-├── .env.example
-└── README.md
+
+## Docker
+
+Build image:
+
+```bash
+docker build -t coin-catalog-be .
 ```
+
+Run container:
+
+```bash
+docker run --env-file .env -p 3000:3000 coin-catalog-be
+```
+
+## Health checks
+
+- `GET /health` -> process liveness + uptime
+- `GET /ready` -> dependency readiness (Firebase up/down)
+
+## API base path
+
+`/api/v1`
+
+### Auth
+
+- `POST /api/v1/auth/register`
+- `POST /api/v1/auth/login`
+- `POST /api/v1/auth/logout`
+- `POST /api/v1/auth/activate-pro`
+- `GET /api/v1/auth/verify`
+
+### Collection
+
+- `GET /api/v1/collection`
+- `POST /api/v1/collection`
+- `PUT /api/v1/collection/:id`
+- `DELETE /api/v1/collection/:id`
+- `GET /api/v1/collection/stats`
+
+### Wishlist
+
+- `GET /api/v1/wishlist`
+- `POST /api/v1/wishlist`
+- `DELETE /api/v1/wishlist/:id`
+
+### Sync
+
+- `POST /api/v1/sync/collection`
+- `POST /api/v1/sync/wishlist`
+- `GET /api/v1/sync/status`
+
+## Frontend integration notes
+
+For the frontend repo (`coin-catalog-FE`):
+
+1. Store backend base URL in environment config (dev/stage/prod).
+2. Include `Authorization: Bearer <idToken>` for protected routes.
+3. Propagate `X-Request-Id` from responses into frontend logs for easier tracing.
+4. Add client retry/backoff only for transient failures (`429`, `503`), not for validation/auth failures.
+5. Point frontend production domain in backend `ALLOWED_ORIGINS`.
+
+## CI
+
+GitHub Actions workflow (`.github/workflows/ci.yml`) runs:
+
+- `npm ci`
+- `npm test`
+- `node --check src/index.js`
+
+## Quick production checklist
+
+- [ ] `NODE_ENV=production`
+- [ ] Strong `ALLOWED_ORIGINS` (no wildcards)
+- [ ] Firebase credentials configured
+- [ ] `FIREBASE_WEB_API_KEY` configured
+- [ ] HTTPS termination in front of backend
+- [ ] Log aggregation and alerting configured
+- [ ] Regular dependency updates + `npm audit` review

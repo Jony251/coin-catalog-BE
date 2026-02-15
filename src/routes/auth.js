@@ -9,10 +9,17 @@ const router = express.Router();
 router.post(
   '/register',
   [
-    body('email').isEmail().withMessage('Invalid email'),
-    body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
-    body('nickname').trim().isLength({ min: 3 }).withMessage('Nickname must be at least 3 characters'),
-    body('photo').optional().isString(),
+    body('email').isEmail().withMessage('Invalid email').normalizeEmail(),
+    body('password')
+      .isString()
+      .isLength({ min: 8 })
+      .withMessage('Password must be at least 8 characters'),
+    body('nickname')
+      .isString()
+      .trim()
+      .isLength({ min: 3, max: 50 })
+      .withMessage('Nickname must be 3-50 characters'),
+    body('photo').optional({ nullable: true }).isString().isLength({ max: 2048 }),
     validate,
   ],
   authController.register
@@ -21,8 +28,8 @@ router.post(
 router.post(
   '/login',
   [
-    body('email').isEmail().withMessage('Invalid email'),
-    body('password').notEmpty().withMessage('Password is required'),
+    body('email').isEmail().withMessage('Invalid email').normalizeEmail(),
+    body('password').isString().notEmpty().withMessage('Password is required'),
     validate,
   ],
   authController.login
@@ -34,7 +41,13 @@ router.post(
   '/activate-pro',
   authenticate,
   [
-    body('proCode').notEmpty().withMessage('PRO activation code is required'),
+    body('proCode')
+      .isString()
+      .trim()
+      .notEmpty()
+      .withMessage('PRO activation code is required')
+      .isLength({ max: 128 })
+      .withMessage('PRO activation code is too long'),
     validate,
   ],
   authController.activatePro
