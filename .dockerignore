@@ -5,5 +5,7 @@ yarn-error.log
 .env
 .git
 .gitignore
-Dockerfile
 README.md
+coverage
+test
+.github

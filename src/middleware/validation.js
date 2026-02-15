@@ -1,14 +1,16 @@
 import { validationResult } from 'express-validator';
+import { AppError } from './errorHandler.js';
 
 export const validate = (req, res, next) => {
   const errors = validationResult(req);
   
   if (!errors.isEmpty()) {
-    return res.status(400).json({
-      success: false,
-      error: 'Validation error',
-      details: errors.array(),
-    });
+    const details = errors.array().map((error) => ({
+      field: error.path,
+      message: error.msg,
+    }));
+
+    return next(new AppError('Validation error', 400, details));
   }
   
   next();
