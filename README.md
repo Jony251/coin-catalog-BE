@@ -73,6 +73,12 @@ Write updates:
 NUMISTA_API_KEY=your_key npm run coins:enrich:numista
 ```
 
+If Firestore rules allow public writes to `coins` (no Admin SDK credentials available), use the REST runner:
+
+```bash
+NUMISTA_API_KEY=your_key npm run coins:enrich:numista:rest -- --project-id=your_firebase_project_id
+```
+
 Useful options:
 
 - `--collection=<name>` (default `coins`)
